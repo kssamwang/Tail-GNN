@@ -94,20 +94,51 @@ def convert_to_torch_tensor(features, adj, tail_adj, labels, idx_train, idx_val,
     return features, adj, tail_adj, iden, labels, idx_train, idx_val, idx_test
 
 
-def link_dropout(adj, idx, k=5):
+# def link_dropout(adj, idx, k=5):
     
-    tail_adj = adj.copy()
-    num_links = np.random.randint(k, size=idx.shape[0]) 
-    num_links += 1
+#     tail_adj = adj.copy()
+#     num_links = np.random.randint(k, size=idx.shape[0]) 
+#     num_links += 1
 
-    for i in range(idx.shape[0]):
-        index = tail_adj[idx[i]].nonzero()[1]
-        new_idx = np.random.choice(index, num_links[i], replace=False)
-        tail_adj[idx[i]] = 0.0
-        for j in new_idx:
-            tail_adj[idx[i], j] = 1.0
-    return tail_adj
+#     for i in range(idx.shape[0]):
+#         index = tail_adj[idx[i]].nonzero()[1]
+#         new_idx = np.random.choice(index, num_links[i], replace=False)
+#         tail_adj[idx[i]] = 0.0
+#         for j in new_idx:
+#             tail_adj[idx[i], j] = 1.0
+#     return tail_adj
 
+def link_dropout(edge_index, idx, k=5):
+    # 复制 edge_index，避免对原始数据进行修改
+    edge_index = edge_index.clone()
+
+    # 从 edge_index 动态确定 num_nodes
+    num_nodes = torch.max(edge_index) + 1
+
+    # 转换 edge_index 为邻接列表（或字典）格式，方便操作
+    adj_dict = {i: [] for i in range(num_nodes.item())}
+    for i in range(edge_index.size(1)):
+        src, dst = edge_index[0, i].item(), edge_index[1, i].item()
+        adj_dict[src].append(dst)
+
+    # 为每个指定的 idx 结点随机保留 k 条边（或更少）
+    for i in idx:
+        neighbors = adj_dict[i]  # 获取该节点的邻居
+        if len(neighbors) == 0:
+            continue
+        num_links = np.random.randint(1, k+1)  # 保留至少1条边
+        keep_neighbors = np.random.choice(neighbors, num_links, replace=False)
+        adj_dict[i] = list(keep_neighbors)  # 更新邻接列表，仅保留随机选出的邻居
+
+    # 重新构建 edge_index
+    new_edges = []
+    for src, dsts in adj_dict.items():
+        for dst in dsts:
+            new_edges.append([src, dst])
+
+    new_edge_index = torch.tensor(new_edges, dtype=torch.long).t().contiguous()
+
+    return new_edge_index
 
 # split head vs tail nodes
 def split_nodes(adj, k=5):

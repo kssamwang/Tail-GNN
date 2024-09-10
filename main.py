@@ -12,7 +12,8 @@ from utils import *
 from layers import Discriminator
 from models import TailGNN
 
-#Get parse argument
+# from torch_geometric.utils import to_edge_index
+# Get parse argument
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--dataset", type=str, default='actor', help='dataset')
@@ -65,11 +66,21 @@ def normalize_output(out_feat, idx):
         sum_m += torch.mean(torch.norm(m[idx], dim=1))
     return sum_m 
 
+def to_edge_index(adj):
+    # 将 lil_matrix 转换为 coo_matrix
+    adj_coo = adj.tocoo()
+
+    # 从 coo_matrix 中提取行和列，构造 edge_index
+    row = torch.from_numpy(adj_coo.row).long()
+    col = torch.from_numpy(adj_coo.col).long()
+
+    edge_index = torch.stack([row, col], dim=0)
+    return edge_index
 
 def train_disc(epoch, batch):
     disc.train()
     optimizer_D.zero_grad()
-
+    print("adj.shape",adj.shape)
     embed_h, _, _ = embed_model(features, adj, True)
     embed_t, _, _ = embed_model(features, tail_adj, False)
 
@@ -140,13 +151,18 @@ def test():
 
 
 features, adj, labels, idx = data_process.load_dataset(dataset, k=args.k)
+print("adj.shape after load_dataset",adj.shape)
+print(type(adj))
+adj = to_edge_index(adj)
+print("adj.shape after to_edge_index",adj.shape)
 features = torch.FloatTensor(features)
 labels = np.argmax(labels,1)
 labels = torch.LongTensor(labels)
 
 tail_adj = data_process.link_dropout(adj, idx[0])
-adj = torch.FloatTensor(adj.todense())
-tail_adj = torch.FloatTensor(tail_adj.todense())
+print("tail_adj.shape after link_dropout",tail_adj.shape)
+# adj = torch.FloatTensor(adj.todense())
+# tail_adj = torch.FloatTensor(tail_adj.todense())
 
 idx_train = torch.LongTensor(idx[0])
 idx_val = torch.LongTensor(idx[1])
