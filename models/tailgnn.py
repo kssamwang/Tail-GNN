@@ -15,7 +15,7 @@ class TransGCN(nn.Module):
 		if ver == 1:
 			self.r = Relation(nfeat, ablation)
 		else:
-			self.r = Relationv2(nfeat,nhid, ablation)
+			self.r = Relationv2(nfeat, nhid, ablation)
 
 		self.g = Generator(nfeat, g_sigma, ablation)
 		self.gc = GCNConv(nfeat, nhid)
