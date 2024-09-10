@@ -2,64 +2,49 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-import scipy.sparse as sp
-from layers import GraphConv, GraphAttentionLayer, SpGraphAttentionLayer, SAGELayer
+from torch_geometric.nn import GCNConv, GATConv, SAGEConv
 
 
 class GCN(nn.Module):
-    def __init__(self, nfeat, nhid, nclass, dropout):
-        super(GCN, self).__init__()
+	def __init__(self, nfeat, nhid, nclass, dropout):
+		super(GCN, self).__init__()
+		self.gc1 = GCNConv(nfeat, nhid)
+		self.gc2 = GCNConv(nhid, nclass)
+		self.dropout = dropout
 
-        self.gc1 = GraphConv(nfeat, nhid)
-        self.gc2 = GraphConv(nhid, nclass)
-        self.dropout = dropout
-
-    def forward(self, x, adj):        
-        x = F.relu(self.gc1(x, adj))        
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = self.gc2(x, adj)
-        #x = F.dropout(x, self.dropout, training=self.training)
-        return x 
-
-
+	def forward(self, x, edge_index):
+		x = F.relu(self.gc1(x, edge_index))
+		x = F.dropout(x, self.dropout, training=self.training)
+		x = self.gc2(x, edge_index)
+		return x
 
 class GAT(nn.Module):
-    def __init__(self, nfeat, nhid, nclass, dropout=0.5, alpha=0.2, nheads=3):
-        super(GAT, self).__init__()
-        self.dropout = dropout
+	def __init__(self, nfeat, nhid, nclass, dropout=0.5, alpha=0.2, nheads=3):
+		super(GAT, self).__init__()
+		self.dropout = dropout
+		self.attentions = GATConv(nfeat, nhid, heads=nheads, dropout=dropout, concat=True, negative_slope=alpha)
+		self.out_att = GATConv(nhid * nheads, nclass, heads=1, dropout=dropout, concat=False, negative_slope=alpha)
 
-        self.attentions = [SpGraphAttentionLayer(nfeat, nhid, dropout=dropout, alpha=alpha, concat=True) for _ in range(nheads)]
-        for i, attention in enumerate(self.attentions):
-            self.add_module('attention_{}'.format(i), attention)
-
-        self.out_att = SpGraphAttentionLayer(nhid * nheads, nclass, dropout=dropout, alpha=alpha, concat=False)
-
-
-    def forward(self, x, adj):
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = torch.cat([att(x, adj) for att in self.attentions], dim=1)
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = F.elu(self.out_att(x, adj))
-        return x
-
+	def forward(self, x, edge_index):
+		x = F.dropout(x, self.dropout, training=self.training)
+		x = self.attentions(x, edge_index)
+		x = F.dropout(x, self.dropout, training=self.training)
+		x = F.elu(self.out_att(x, edge_index))
+		return x
 
 class GraphSAGE(nn.Module):
-    def __init__(self, nfeat, nhid1, nhid2, nclass, dropout=0.5, alpha=0.2, nheads=3):
-        super(GraphSAGE, self).__init__()
+	def __init__(self, nfeat, nhid1, nhid2, nclass, dropout=0.5):
+		super(GraphSAGE, self).__init__()
+		self.sage1 = SAGEConv(nfeat, nhid1)
+		self.sage2 = SAGEConv(nhid1, nhid2)
+		self.fc = nn.Linear(nhid2, nclass, bias=True)
+		self.dropout = dropout
 
-        self.sage1 = SAGELayer(nfeat, nhid1)
-        self.sage2 = SAGELayer(nhid1*2, nhid2)
-        self.fc = nn.Linear(nhid2*2, nclass, bias=True)
-        self.dropout = dropout
-
-    def forward(self, x, adj):
-
-        x = F.relu(self.sage1(x, adj))
-        x = F.normalize(x)
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = F.relu(self.sage2(x, adj))
-        x = F.normalize(x)
-
-        x = self.fc(x)
-        return x #F.log_softmax(x, dim=1)
+	def forward(self, x, edge_index):
+		x = F.relu(self.sage1(x, edge_index))
+		x = F.normalize(x)
+		x = F.dropout(x, self.dropout, training=self.training)
+		x = F.relu(self.sage2(x, edge_index))
+		x = F.normalize(x)
+		x = self.fc(x)
+		return x
