@@ -7,7 +7,7 @@ import scipy as sp
 import datetime, time
 import collections, re
 import os, argparse
-
+from torch_geometric.typing import SparseTensor
 from utils import *
 from layers import Discriminator
 from models import TailGNN
@@ -66,16 +66,64 @@ def normalize_output(out_feat, idx):
         sum_m += torch.mean(torch.norm(m[idx], dim=1))
     return sum_m 
 
-def to_edge_index(adj):
-    # 将 lil_matrix 转换为 coo_matrix
+def to_edge_index(adj,to_sparse=False):
+    # 将 adj <class 'scipy.sparse._lil.lil_matrix'> 转换为 coo_matrix
     adj_coo = adj.tocoo()
 
     # 从 coo_matrix 中提取行和列，构造 edge_index
     row = torch.from_numpy(adj_coo.row).long()
     col = torch.from_numpy(adj_coo.col).long()
+    if to_sparse:
+        # 获取对应的权重值
+        values = torch.from_numpy(adj_coo.data).float()
 
-    edge_index = torch.stack([row, col], dim=0)
-    return edge_index
+        # 稀疏张量的大小是 (num_nodes, num_nodes)，即邻接矩阵的大小
+        num_nodes = adj.shape[0]
+
+        # 使用 SparseTensor 来创建稀疏张量
+        sparse_tensor = SparseTensor(row=row, col=col, value=values, sparse_sizes=(num_nodes, num_nodes))
+
+        return sparse_tensor  # 返回 PyTorch 的 SparseTensor
+    else:
+        edge_index = torch.stack([row, col], dim=0)
+        return edge_index
+
+def to_sparse_edge_index(edge_index):
+    # 假设有3个节点，edge_index表示图的边
+    assert edge_index.shape[0] == 2
+    num_nodes = torch.max(edge_index) + 1
+
+    # 假设所有边的权重为1
+    values = torch.ones(edge_index.size(1))
+
+    # 稀疏张量的大小是 (num_nodes, num_nodes)，表示邻接矩阵的大小
+    sparse_edge_index = torch.sparse_coo_tensor(indices=edge_index, values=values, size=(num_nodes, num_nodes))
+    print("return sparse_edge_index")
+    return sparse_edge_index
+
+# def to_sparse_edge_index(edge_index):
+#     # 假设有3个节点，edge_index表示图的边
+#     assert edge_index.shape[0] == 2
+#     num_nodes = torch.max(edge_index) + 1
+
+#     # 假设所有边的权重为1
+#     values = torch.ones(edge_index.size(1))
+
+#     # 稀疏张量的大小是 (num_nodes, num_nodes)，表示邻接矩阵的大小
+#     sparse_edge_index = torch.sparse_coo_tensor(indices=edge_index, values=values, size=(num_nodes, num_nodes))
+#     print("return sparse_edge_index")
+#     return sparse_edge_index
+
+def to_sparse_edge_index(edge_index, num_nodes=None):
+    if num_nodes is None:
+        num_nodes = edge_index.max().item() + 1  # 确定节点数量
+    
+    # 转换为 SparseTensor 格式
+    sparse_tensor = SparseTensor.from_edge_index(
+        edge_index, edge_attr=None, sparse_sizes=(num_nodes, num_nodes)
+    )
+    
+    return sparse_tensor
 
 def train_disc(epoch, batch):
     disc.train()
@@ -154,6 +202,7 @@ def test():
 features, adj, labels, idx = data_process.load_dataset(dataset, k=args.k)
 print("adj.shape after load_dataset",adj.shape,adj.dtype)
 print(type(adj))
+
 adj = to_edge_index(adj)
 print("adj.shape after to_edge_index",adj.shape,adj.dtype)
 features = torch.FloatTensor(features)
@@ -162,6 +211,10 @@ labels = torch.LongTensor(labels)
 
 tail_adj = data_process.link_dropout(adj, idx[0])
 print("tail_adj.shape after link_dropout",tail_adj.shape)
+
+if args.dataset in ['cs-citation','amazon']:
+    adj = to_sparse_edge_index(adj)
+    tail_adj = to_sparse_edge_index(tail_adj)
 
 idx_train = torch.LongTensor(idx[0])
 idx_val = torch.LongTensor(idx[1])
@@ -227,11 +280,15 @@ for epoch in range(args.epochs):
 
     Loss, acc_train, loss_val, acc_val = train_embed(epoch, idx_train)
 
+    epoch_time = time.time() - t
+    
     log =   'Epoch: {:d} '.format(epoch+1) + \
             'loss_train: {:.4f} '.format(Loss[0].item()) + \
             'loss_val: {:.4f} '.format(loss_val) + \
             'acc_train: {:.4f} '.format(acc_train) + \
-            'acc_val: {:.4f} '.format(acc_val)
+            'acc_val: {:.4f} '.format(acc_val) + \
+            'epoch_time: {:3f}'.format(epoch_time)
+    
     print(log)
 
     #save best model 

@@ -11,21 +11,21 @@ from itertools import product
 
 folder = 'dataset/'
 
-def normalize_adj(adj, norm_type=1, iden=False):
-    # 1: mean norm, 2: spectral norm
-    # add the diag into adj, namely, the self-connection. then normalization
-    if iden:
-        adj = adj + np.eye(adj.shape[0])       # self-loop
-    if norm_type==1:
-        D = np.sum(adj, axis=1)
-        adjNor = adj / D
-        adjNor[np.isinf(adjNor)] = 0.
-    else:
-        adj[adj > 0.0] = 1.0
-        D_ = np.diag(np.power(np.sum(adj, axis=1), -0.5)) 
-        adjNor = np.dot(np.dot(D_, adj), D_)
+# def normalize_adj(adj, norm_type=1, iden=False):
+#     # 1: mean norm, 2: spectral norm
+#     # add the diag into adj, namely, the self-connection. then normalization
+#     if iden:
+#         adj = adj + np.eye(adj.shape[0])       # self-loop
+#     if norm_type==1:
+#         D = np.sum(adj, axis=1)
+#         adjNor = adj / D
+#         adjNor[np.isinf(adjNor)] = 0.
+#     else:
+#         adj[adj > 0.0] = 1.0
+#         D_ = np.diag(np.power(np.sum(adj, axis=1), -0.5)) 
+#         adjNor = np.dot(np.dot(D_, adj), D_)
     
-    return adjNor, adj 
+#     return adjNor, adj 
 
 
 def encode_onehot(labels):

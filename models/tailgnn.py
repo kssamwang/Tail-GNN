@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.sparse as sp
+from torch_sparse import SparseTensor
 from torch_geometric.nn import GCNConv, GATConv
 from torch_scatter import scatter_mean, scatter_add
 from torch_geometric.utils import degree
@@ -23,13 +24,18 @@ class TransGCN(nn.Module):
 		self.gc = GCNConv(nfeat, nhid, add_self_loops=True)
 
 	def forward(self, x, edge_index, head):
-		row, col = edge_index 
+		# 判断 edge_index 是否是 SparseTensor
+		# print("type(edge_index)",type(edge_index))
+		if isinstance(edge_index, SparseTensor):
+			row, col, _ = edge_index.coo()  # 提取 SparseTensor 的行和列索引
+		else:
+			row, col = edge_index  # 普通 tensor 的情况
 
 		# 计算邻居特征的加权平均
 		num_neighbor = scatter_add(torch.ones_like(col, dtype=torch.float), row, dim=0, dim_size=x.size(0))
 
 		neighbor = scatter_mean(x[col], row, dim=0, dim_size=x.size(0))
-
+  
 		# 输出层计算
 		output = self.r(x, neighbor)
 
@@ -70,7 +76,11 @@ class TransGAT(nn.Module):
 			self.add_module('attention_{}'.format(i), attention)
 
 	def forward(self, x, edge_index, head):
-		row, col = edge_index 
+		# 判断 edge_index 是否是 SparseTensor
+		if isinstance(edge_index, SparseTensor):
+			row, col, _ = edge_index.coo()  # 提取 SparseTensor 的行和列索引
+		else:
+			row, col = edge_index  # 普通 tensor 的情况
 
 		# 计算邻居特征的加权平均
 		neighbor = scatter_mean(x[col], row, dim=0, dim_size=x.size(0))
@@ -105,7 +115,11 @@ class TransSAGE(nn.Module):
 		self.weight = nn.Linear(nfeat, nhid, bias=False)
 
 	def forward(self, x, edge_index, head):
-		row, col = edge_index
+		# 判断 edge_index 是否是 SparseTensor
+		if isinstance(edge_index, SparseTensor):
+			row, col, _ = edge_index.coo()  # 提取 SparseTensor 的行和列索引
+		else:
+			row, col = edge_index  # 普通 tensor 的情况
 
 		neighbor = scatter_mean(x[col], row, dim=0, dim_size=x.size(0))
 
