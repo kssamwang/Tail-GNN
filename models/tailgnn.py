@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.sparse as sp
 from torch_geometric.nn import GCNConv, GATConv
 from torch_scatter import scatter_mean, scatter_add
+from torch_geometric.utils import degree
 from layers import Relation, Relationv2, Generator
 
 class TransGCN(nn.Module):
@@ -26,6 +27,7 @@ class TransGCN(nn.Module):
 
 		# 计算邻居特征的加权平均
 		num_neighbor = scatter_add(torch.ones_like(col, dtype=torch.float), row, dim=0, dim_size=x.size(0))
+
 		neighbor = scatter_mean(x[col], row, dim=0, dim_size=x.size(0))
 
 		# 输出层计算
@@ -67,22 +69,23 @@ class TransGAT(nn.Module):
 		for i, attention in enumerate(self.gat):
 			self.add_module('attention_{}'.format(i), attention)
 
-	def forward(self, x, adj, head):
-		mean = F.normalize(adj, p=1, dim=1)
-		neighbor = torch.mm(mean,x)
+	def forward(self, x, edge_index, head):
+		row, col = edge_index 
+
+		# 计算邻居特征的加权平均
+		neighbor = scatter_mean(x[col], row, dim=0, dim_size=x.size(0))
 
 		output = self.r(x, neighbor)
-		adj = adj + torch.eye(adj.size(0), device=self.device)
-		edge = adj.nonzero(as_tuple=False).t()
 
 		if head or self.ablation == 2:
-			h_k = torch.cat([att(x, edge) for att in self.gat], dim=1)
+			h_k = torch.cat([att(x, edge_index) for att in self.gat], dim=1)
 		else:
 			if self.ablation == 1:
 				h_s = self.g(output)
 			else:
 				h_s = output
-			h_k = torch.cat([att(x, edge, mi=h_s) for att in self.gat], dim=1)
+			x = x + h_s
+			h_k = torch.cat([att(x, edge_index) for att in self.gat], dim=1)
 		
 		return h_k, output
 
@@ -101,10 +104,11 @@ class TransSAGE(nn.Module):
 		self.g = Generator(nfeat, g_sigma, ablation)
 		self.weight = nn.Linear(nfeat, nhid, bias=False)
 
-	def forward(self, x, adj, head):
-		
-		mean = F.normalize(adj, p=1, dim=1)
-		neighbor = torch.mm(mean,x)
+	def forward(self, x, edge_index, head):
+		row, col = edge_index
+
+		neighbor = scatter_mean(x[col], row, dim=0, dim_size=x.size(0))
+
 		output = self.r(x, neighbor)
 
 		if head or self.ablation == 2:
@@ -118,7 +122,9 @@ class TransSAGE(nn.Module):
 			else:
 				h_s = output
 			
-			norm = torch.sum(adj, 1, keepdim=True) + 1
+			deg = degree(edge_index[0], num_nodes=x.size(0))
+			norm = deg.view(-1, 1) + 1
+
 			neighbor = neighbor + h_s / norm
 			ft_input = self.weight(x)
 			ft_neighbor = self.weight(neighbor)
