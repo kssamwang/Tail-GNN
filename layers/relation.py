@@ -27,7 +27,7 @@ class Relation(nn.Module):
 		self.r.data.uniform_(-stdv, stdv)
 
 	def forward(self, ft, neighbor):
-
+		
 		if self.ablation == 3:
 			self.m = ft + self.r - neighbor
 		else:

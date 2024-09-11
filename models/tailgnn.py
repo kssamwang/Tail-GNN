@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.sparse as sp
 from torch_geometric.nn import GCNConv, GATConv
+from torch_scatter import scatter_mean, scatter_add
 from layers import Relation, Relationv2, Generator
 
 class TransGCN(nn.Module):
@@ -18,35 +19,36 @@ class TransGCN(nn.Module):
 			self.r = Relationv2(nfeat, nhid, ablation)
 
 		self.g = Generator(nfeat, g_sigma, ablation)
-		self.gc = GCNConv(nfeat, nhid)
+		self.gc = GCNConv(nfeat, nhid, add_self_loops=True)
 
+	def forward(self, x, edge_index, head):
+		row, col = edge_index 
 
-	def forward(self, x, adj, head):
-		
-		mean = F.normalize(adj, p=1, dim=1)
-		neighbor = torch.mm(mean,x)
+		# 计算邻居特征的加权平均
+		num_neighbor = scatter_add(torch.ones_like(col, dtype=torch.float), row, dim=0, dim_size=x.size(0))
+		neighbor = scatter_mean(x[col], row, dim=0, dim_size=x.size(0))
 
+		# 输出层计算
 		output = self.r(x, neighbor)
-		adj = adj + torch.eye(adj.size(0), device=self.device)
 
 		if head or self.ablation == 2:
-			norm = F.normalize(adj, p=1, dim=1)
-			h_k = self.gc(x, norm)
+			# 归一化操作
+			h_k = self.gc(x, edge_index)
 		else:
 			if self.ablation == 1:
 				h_s = self.g(output)
 			else:
 				h_s = output
 
-			h_k = self.gc(x, adj)
-			h_s = torch.mm(h_s, self.gc.weight)
+			# 基于 self_loops 的计算
+			h_k = self.gc(x, edge_index)
+			# 融合 h_s 和 h_k
+			h_s = torch.mm(h_s, self.gc.lin.weight.T)
 			h_k = h_k + h_s
 
-			num_neighbor = torch.sum(adj, dim=1, keepdim=True)
-			h_k = h_k / (num_neighbor+1)
+			h_k = h_k / (num_neighbor + 1).unsqueeze(-1)
 
-		return h_k, output 
-	
+		return h_k, output
 
 class TransGAT(nn.Module):
 	def __init__(self, nfeat, nhid, g_sigma,device, ver, ablation=0, nheads=3, dropout=0.5, concat=True):

@@ -7,8 +7,6 @@ def accuracy(output, labels):
 	return correct / labels.size(0)
 
 def micro_f1(output, labels, index):
-	labels = labels.cpu().numpy() if labels.is_cuda else labels.numpy()
-	index = torch.tensor(index)
 	label, count = torch.unique(labels, return_counts=True)
 	most_freq = label[count.argmax()]
 	index = index[labels[index] != most_freq]

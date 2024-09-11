@@ -124,9 +124,9 @@ def link_dropout(edge_index, idx, k=5):
     # 为每个指定的 idx 结点随机保留 k 条边（或更少）
     for i in idx:
         neighbors = adj_dict[i]  # 获取该节点的邻居
-        if len(neighbors) == 0:
-            continue
         num_links = np.random.randint(1, k+1)  # 保留至少1条边
+        if len(neighbors) < num_links:
+            continue
         keep_neighbors = np.random.choice(neighbors, num_links, replace=False)
         adj_dict[i] = list(keep_neighbors)  # 更新邻接列表，仅保留随机选出的邻居
 

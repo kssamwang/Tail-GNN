@@ -80,7 +80,7 @@ def to_edge_index(adj):
 def train_disc(epoch, batch):
     disc.train()
     optimizer_D.zero_grad()
-    print("adj.shape",adj.shape)
+    #print("adj.shape",adj.shape)
     embed_h, _, _ = embed_model(features, adj, True)
     embed_t, _, _ = embed_model(features, tail_adj, False)
 
@@ -126,9 +126,10 @@ def train_embed(epoch, batch):
 
     # validate:
     embed_model.eval()
-    _, embed_val, _ = embed_model(features, adj, False)
-    loss_val = F.nll_loss(embed_val[idx_val], labels[idx_val])
-    acc_val = metrics.accuracy(embed_val[idx_val], labels[idx_val])
+    with torch.no_grad():
+        _, embed_val, _ = embed_model(features, adj, False)
+        loss_val = F.nll_loss(embed_val[idx_val], labels[idx_val])
+        acc_val = metrics.accuracy(embed_val[idx_val], labels[idx_val])
 
     return (L_all, L_cls, L_d), acc_train, loss_val, acc_val
 
@@ -143,26 +144,24 @@ def test():
 
     log =   "Test set results: " + \
             "loss={:.4f} ".format(loss_test.item()) + \
-            "accuracy={:.4f} ".format(acc_test.item()) + \
-            "f1={:.4f}".format(f1_test.item())
+            "accuracy={:.4f} ".format(acc_test) + \
+            "f1={:.4f}".format(f1_test)
             
     print(log) 
     return
 
 
 features, adj, labels, idx = data_process.load_dataset(dataset, k=args.k)
-print("adj.shape after load_dataset",adj.shape)
+print("adj.shape after load_dataset",adj.shape,adj.dtype)
 print(type(adj))
 adj = to_edge_index(adj)
-print("adj.shape after to_edge_index",adj.shape)
+print("adj.shape after to_edge_index",adj.shape,adj.dtype)
 features = torch.FloatTensor(features)
 labels = np.argmax(labels,1)
 labels = torch.LongTensor(labels)
 
 tail_adj = data_process.link_dropout(adj, idx[0])
 print("tail_adj.shape after link_dropout",tail_adj.shape)
-# adj = torch.FloatTensor(adj.todense())
-# tail_adj = torch.FloatTensor(tail_adj.todense())
 
 idx_train = torch.LongTensor(idx[0])
 idx_val = torch.LongTensor(idx[1])
@@ -242,7 +241,7 @@ for epoch in range(args.epochs):
         epoch_early_stop = epoch
 
         torch.save(embed_model,os.path.join(save_path,'model.pt'))
-        best_loss = np.min((loss_val, best_loss))
+        best_loss = np.min((loss_val.cpu().numpy(), best_loss))
         print('Model saved!')
             
         best_acc = np.max((acc_val, best_acc))
