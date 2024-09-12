@@ -149,12 +149,13 @@ class TransSAGE(nn.Module):
 
 # latent relation GCN
 class TailGNN(nn.Module):
-	def __init__(self, nfeat, nclass, params, device, ver=1):
+	def __init__(self, nfeat, nclass, params, device):
 		super(TailGNN, self).__init__()
 
 		self.nhid = params.hidden
 		self.dropout = params.dropout
 		self.arch = params.arch
+		ver = params.r_ver
 
 		if self.arch == 1:
 			self.rel1 = TransGCN(nfeat, self.nhid, g_sigma=params.g_sigma, device=device, \
