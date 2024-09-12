@@ -77,12 +77,27 @@ def load_data(args):
 	h_labels = torch.full((len(idx_train), 1), 1.0, device=device)
 	t_labels = torch.full((len(idx_train), 1), 0.0, device=device)
 
-	return {
-		'features': features, 'adj': adj, 'tail_adj': tail_adj, 'labels': labels,
-		'idx_train': idx_train, 'idx_val': idx_val, 'idx_test': idx_test,
-		'h_labels': h_labels, 't_labels': t_labels,
-		'device': device, 'save_path': save_path
+	data = {
+		'features': features, # Tensor, cuda, float32, shape=(num_nodes,num_features),
+		'adj': adj,           # Tensor, cuda, int64, shape=(2,num_edges) / SparseTensor, size=(num_nodes,num_nodes)
+		'tail_adj': tail_adj, # Tensor, cuda, int64, shape=(2,num_tail_edges) / SparseTensor, size=(num_nodes,num_nodes)
+		'labels': labels,     # Tensor, cuda, int64, shape=(num_nodes,)
+		'idx_train': idx_train, # Tensor, cpu, int64, shape=(num_train_nodes,)
+		'idx_val': idx_val,     # Tensor, cpu, int64, shape=(num_valid_nodes,)
+		'idx_test': idx_test,   # Tensor, cpu, int64, shape=(num_test_nodes,)
+		'h_labels': h_labels,   # Tensor, cuda, float32, shape=(num_train_nodes,1)
+		't_labels': t_labels,   # Tensor, cuda, float32, shape=(num_train_nodes,1)
+		'device': device,       # str
+		'save_path': save_path  # str
 	}
+
+	# for key in data.keys():
+	# 	print(key,type(data[key]))
+	# 	if isinstance(data[key],torch.Tensor):
+	# 		print(data[key].device,data[key].shape,data[key].dtype)
+	# 	if isinstance(data[key],SparseTensor):
+	# 		print(data[key].device,data[key].size(0),data[key].size(1),data[key].dtype)
+	return data
 
 def train_model(args, data):
 	criterion = nn.BCELoss()

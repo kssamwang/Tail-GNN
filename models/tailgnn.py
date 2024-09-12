@@ -35,7 +35,7 @@ class TransGCN(nn.Module):
 		num_neighbor = scatter_add(torch.ones_like(col, dtype=torch.float), row, dim=0, dim_size=x.size(0))
 
 		neighbor = scatter_mean(x[col], row, dim=0, dim_size=x.size(0))
-  
+
 		# 输出层计算
 		output = self.r(x, neighbor)
 
@@ -61,7 +61,7 @@ class TransGCN(nn.Module):
 class TransGAT(nn.Module):
 	def __init__(self, nfeat, nhid, g_sigma,device, ver, ablation=0, nheads=3, dropout=0.5, concat=True):
 		super(TransGAT, self).__init__()
-		
+
 		self.device = device
 		self.ablation = ablation
 
