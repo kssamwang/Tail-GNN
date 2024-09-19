@@ -101,8 +101,9 @@ def train_embed(args, disc, embed_model, optimizer, criterion, features, adj, ta
 
 def test(embed_model, features, adj, labels, idx_test):
 	embed_model.eval()
-	_, embed_test, _ = embed_model(features, adj, False)
-	loss_test = F.nll_loss(embed_test[idx_test], labels[idx_test])
+	with torch.no_grad():
+		_, embed_test, _ = embed_model(features, adj, False)
+		loss_test = F.nll_loss(embed_test[idx_test], labels[idx_test])
 
 	acc_test = metrics.accuracy(embed_test[idx_test], labels[idx_test])
 	f1_test = metrics.micro_f1(embed_test.cpu(), labels.cpu(), idx_test)
